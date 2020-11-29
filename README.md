@@ -32,6 +32,7 @@ Captured via Line In from an Arduino Uno
 # Wiring Diagram
 
 Use 220Ω resistors
+
 This uses PWM to simulate a DAC, I wouldn't wire this to anything other than simple, analog, cheap headphones
 
 <img src="https://i.imgur.com/4uJwjzQ.png" width="80%%">
@@ -63,7 +64,7 @@ When you want to convert again, press Stop, change your arguments, and tap Run a
 Once the music is captured, the Output Console has a long list of numbers.
 - Select the music data from the Output Console
 - Copy it
-- Paste it inside music.h
+- Paste it inside music.h under music_dev
 - Inside Setup in Pretendo.ino, around line 430, comment selectDemoMusic call
 - Uncomment playMusic(music_dev)
 - Upload the code
