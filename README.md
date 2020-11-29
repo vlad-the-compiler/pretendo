@@ -43,7 +43,7 @@ Converting your own files is Easy™
 
 It is done via a Lua script and the FCEUX NES emulator
 - Download [FCEUX](http://fceux.com/web/download.html)
-- Open FCEUX, load up your favourite ROM in the form of a NSF
+- Open FCEUX, load up your favourite ROM in the form of an NSF
 - Make sure you have the NES controller SELECT button bound in Settings
 - File > Lua > New Lua Script Window > Browse... *fceux-apu-capture.lua*
 - You're now ready to convert your own music
@@ -55,14 +55,13 @@ Once you have found a track, write down its number inside the *Arguments* field 
 If the track should not loop, also write down *--oneshot* after the track number.
 After entering the track number and the optional *--oneshot* argument, press Run in the Lua script window. The capture process will start, and the emulator will start playing back the music.
 - **If the selected music does not loop** (i.e. it stops when it ends), press the **SELECT** key when you wish to end the capture, and the data will be written into the Output Console.
-- **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, then press the **SELECT** button and the converter will dump the data to the Output Console.
+- **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, press the **SELECT** button and the converter will dump the data to the Output Console.
 
 In the case of looping music, it is also important to **not** let it loop two full times, as the trimming will fail. Imagine the automatic music trimmer as an algorithm that looks at two loaves of bread: One is full, one has been partially eaten - the algorithm sees the "partially eaten loaf" and goes "hey, I've seen this, this is a part that's identical to the full one, I'll just trim this out". It only needs part of a second loaf of bread to figure out that it looks like the full one. This is what the music trimmer does in our case - it only needs one full playthrough, and then enough of a second one to figure out that it needs to trim it.
-If this explanation is hard to understand, just try the converter, you'll see how it acts in different cases based on the length of time it captures the music data.
 
 When you want to convert again, press Stop, change your arguments, and tap Run again in the Lua script window.
 
-Once the music is captured, the Output Console has a long list of numbers.
+Once the music is captured, the Output Console displays a long list of numbers.
 - Select the music data from the Output Console
 - Copy it
 - Paste it inside music.h under music_dev
