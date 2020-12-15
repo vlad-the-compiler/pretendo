@@ -6,7 +6,7 @@ Turn an Arduino Uno (or any ATmega328-based dev board) into an NES APU emulator!
 
 Captured via Line In from an Arduino Uno
 - [Kirby's Adventure](https://soundcloud.com/user-358261734/pretendo-kirby-test)
-- [Naxatsoft's Summer Carnival '92: RECCA](https://soundcloud.com/user-358261734/pretendo-recca-test)
+- [RECCA (Summer Carnival '92 - Naxatsoft / KID)](https://soundcloud.com/user-358261734/pretendo-recca-test)
 
 # Features
 
