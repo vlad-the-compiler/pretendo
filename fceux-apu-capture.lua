@@ -8,10 +8,6 @@ autoTrim = true
 -- Flag for skipping the first data dump line
 skipFirstLine = true
 
--- Recording counters
-quantizeToFrame = 1
-frameRecordCounter = 0
-
 -- Parse arguments
 if arg == nil then
     arg = ""
@@ -20,10 +16,6 @@ arg = string.gsub(arg, "%s+", "")
 if string.find(arg, "--oneshot") then
     autoTrim = false
     arg = string.gsub(arg, "--oneshot", "")
-end
-if string.find(arg, "-Q2") then
-    quantizeToFrame = 2
-    arg = string.gsub(arg, "-Q2", "")
 end
 
 -- Music index used to iterate through NSF
@@ -160,6 +152,8 @@ function registerDmc(address, length)
         len = length,
         data = {}
     }
+    -- Debug DMC sample addresses
+    -- emu.print("DMC Sample " .. index .. ": " .. address .. " - " .. (address + length - 1) .. ' (' .. length .. ')')
     for i = 1, length do
         dmcStore[index].data[i] = memory.readbyteunsigned(address + i - 1)
     end
@@ -219,160 +213,154 @@ end
 -- Game loop
 while true do
     if recording then
-        frameRecordCounter = frameRecordCounter + 1
-        if frameRecordCounter == quantizeToFrame then
-            -- Compute new state
-            rawState = sound.get().rp2a03
-            state = {
-                square1 = {
-                    f = math.floor(rawState.square1.frequency),
-                    v = math.floor((rawState.square1.volume * 15) + 0.5),
-                    d = rawState.square1.duty
-                },
-                square2 = {
-                    f = math.floor(rawState.square2.frequency),
-                    v = math.floor((rawState.square2.volume * 15) + 0.5),
-                    d = rawState.square2.duty
-                },
-                triangle = {
-                    f = math.floor(rawState.triangle.frequency),
-                    v = math.floor(rawState.triangle.volume + 0.5),
-                },
-                noise = {
-                    p = rawState.noise.regs.frequency,
-                    v = math.floor((rawState.noise.volume * 15) + 0.5),
-                    m = rawState.noise.short
-                },
-                dpcm = {
-                    v = math.floor(rawState.dpcm.volume + 0.5)
-                }
+        -- Compute new state
+        rawState = sound.get().rp2a03
+        state = {
+            square1 = {
+                f = math.floor(rawState.square1.frequency),
+                v = math.floor((rawState.square1.volume * 15) + 0.5),
+                d = rawState.square1.duty
+            },
+            square2 = {
+                f = math.floor(rawState.square2.frequency),
+                v = math.floor((rawState.square2.volume * 15) + 0.5),
+                d = rawState.square2.duty
+            },
+            triangle = {
+                f = math.floor(rawState.triangle.frequency),
+                v = math.floor(rawState.triangle.volume + 0.5),
+            },
+            noise = {
+                p = rawState.noise.regs.frequency,
+                v = math.floor((rawState.noise.volume * 15) + 0.5),
+                m = rawState.noise.short
+            },
+            dpcm = {
+                v = math.floor(rawState.dpcm.volume + 0.5)
             }
-            -- Compute state changes
-            checkS1F = (state.square1.f ~= knownState.square1.f)
-            checkS2F = (state.square2.f ~= knownState.square2.f)
-            checkTF = (state.triangle.f ~= knownState.triangle.f)
-            checkS1Param = ((state.square1.v ~= knownState.square1.v) or (state.square1.d ~= knownState.square1.d))
-            checkS2Param = ((state.square2.v ~= knownState.square2.v) or (state.square2.d ~= knownState.square2.d))
-            checkNParam = ((state.noise.v ~= knownState.noise.v) or (state.noise.p ~= knownState.noise.p))
-            checkDMCKill = (state.dpcm.v == 0) and (knownState.dpcm.v == 1)
-            checkXParam = ((state.noise.m ~= knownState.noise.m) or (dmcTrigger) or (checkDMCKill))
+        }
+        -- Compute state changes
+        checkS1F = (state.square1.f ~= knownState.square1.f)
+        checkS2F = (state.square2.f ~= knownState.square2.f)
+        checkTF = (state.triangle.f ~= knownState.triangle.f)
+        checkS1Param = ((state.square1.v ~= knownState.square1.v) or (state.square1.d ~= knownState.square1.d))
+        checkS2Param = ((state.square2.v ~= knownState.square2.v) or (state.square2.d ~= knownState.square2.d))
+        checkNParam = ((state.noise.v ~= knownState.noise.v) or (state.noise.p ~= knownState.noise.p))
+        checkDMCKill = (state.dpcm.v == 0) and (knownState.dpcm.v == 1)
+        checkXParam = ((state.noise.m ~= knownState.noise.m) or (dmcTrigger) or (checkDMCKill))
 
-            -- Build tracking state
-            -- This only includes pitches, and records absolute values, not changes
-            -- Used in tracking the loop point
-            local trackingState = ""
-            if rawState.square1.volume > 0 then
-                trackingState = trackingState .. "[" .. math.round(rawState.square1.midikey) .. "]"
-            end
-            if rawState.square2.volume > 0 then
-                trackingState = trackingState .. "[" .. math.round(rawState.square2.midikey) .. "]"
-            end
-            if rawState.triangle.volume > 0 then
-                trackingState = trackingState .. "[" .. math.round(rawState.triangle.midikey) .. "]"
-            end
-            if rawState.noise.volume > 0 then
-                trackingState = trackingState .. "[" .. rawState.noise.regs.frequency .. "]"
-            end
-            if rawState.dpcm.volume > 0 then
-                trackingState = trackingState .. "[" .. rawState.dpcm.regs.frequency .. "]"
-            end
+        -- Build tracking state
+        -- This only includes pitches, and records absolute values, not changes
+        -- Used in tracking the loop point
+        local trackingState = ""
+        if rawState.square1.volume > 0 then
+            trackingState = trackingState .. "[" .. math.round(rawState.square1.midikey) .. "]"
+        end
+        if rawState.square2.volume > 0 then
+            trackingState = trackingState .. "[" .. math.round(rawState.square2.midikey) .. "]"
+        end
+        if rawState.triangle.volume > 0 then
+            trackingState = trackingState .. "[" .. math.round(rawState.triangle.midikey) .. "]"
+        end
+        if rawState.noise.volume > 0 then
+            trackingState = trackingState .. "[" .. rawState.noise.regs.frequency .. "]"
+        end
+        if rawState.dpcm.volume > 0 then
+            trackingState = trackingState .. "[" .. rawState.dpcm.regs.frequency .. "]"
+        end
 
-            -- Set control byte
-            control = 0;
-            if checkS1F then
-                control = OR(control, CONTROL_S1F)
-            end
-            if checkS2F then
-                control = OR(control, CONTROL_S2F)
-            end
-            if checkTF then
-                control = OR(control, CONTROL_TF)
-            end
-            if checkS1Param then
-                control = OR(control, CONTROL_S1PARAM)
-            end
-            if checkS2Param then
-                control = OR(control, CONTROL_S2PARAM)
-            end
-            if checkNParam then
-                control = OR(control, CONTROL_NPARAM)
-            end
-            if state.triangle.v > 0.5 then
-                control = OR(control, CONTROL_STATUS_TV)
-            end
-            if checkXParam then
-                control = OR(control, CONTROL_STATUS_X)
-            end
+        -- Set control byte
+        control = 0;
+        if checkS1F then
+            control = OR(control, CONTROL_S1F)
+        end
+        if checkS2F then
+            control = OR(control, CONTROL_S2F)
+        end
+        if checkTF then
+            control = OR(control, CONTROL_TF)
+        end
+        if checkS1Param then
+            control = OR(control, CONTROL_S1PARAM)
+        end
+        if checkS2Param then
+            control = OR(control, CONTROL_S2PARAM)
+        end
+        if checkNParam then
+            control = OR(control, CONTROL_NPARAM)
+        end
+        if state.triangle.v > 0.5 then
+            control = OR(control, CONTROL_STATUS_TV)
+        end
+        if checkXParam then
+            control = OR(control, CONTROL_STATUS_X)
+        end
 
-            -- Build state changes
-            stateData = tostring(control)
-            if checkS1F then
-                stateData = stateData .. ", " .. bit.rshift(state.square1.f, 8) .. ", " .. AND(state.square1.f, 255)
+        -- Build state changes
+        stateData = tostring(control)
+        if checkS1F then
+            stateData = stateData .. ", " .. AND(bit.rshift(state.square1.f, 8), 255) .. ", " .. AND(state.square1.f, 255)
+        end
+        if checkS2F then
+            stateData = stateData .. ", " .. AND(bit.rshift(state.square2.f, 8), 255) .. ", " .. AND(state.square2.f, 255)
+        end
+        if checkTF then
+            stateData = stateData .. ", " .. AND(bit.rshift(state.triangle.f, 8), 255) .. ", " .. AND(state.triangle.f, 255)
+        end
+        if checkS1Param then
+            stateData = stateData .. ", " .. OR(bit.lshift(state.square1.d, 4), state.square1.v)
+        end
+        if checkS2Param then
+            stateData = stateData .. ", " .. OR(bit.lshift(state.square2.d, 4), state.square2.v)
+        end
+        if checkNParam then
+            stateData = stateData .. ", " .. OR(bit.lshift(state.noise.p, 4), state.noise.v)
+        end
+        if checkXParam then
+            local dmcTriggerBit = 0
+            if dmcTrigger then
+                dmcTriggerBit = 1
             end
-            if checkS2F then
-                stateData = stateData .. ", " .. bit.rshift(state.square2.f, 8) .. ", " .. AND(state.square2.f, 255)
+            local noiseModeBit = 0
+            if state.noise.m then
+                noiseModeBit = 1
             end
-            if checkTF then
-                stateData = stateData .. ", " .. bit.rshift(state.triangle.f, 8) .. ", " .. AND(state.triangle.f, 255)
+            local dmcKillBit = 0
+            if checkDMCKill then
+                dmcKillBit = 1
             end
-            if checkS1Param then
-                stateData = stateData .. ", " .. OR(bit.lshift(state.square1.d, 4), state.square1.v)
-            end
-            if checkS2Param then
-                stateData = stateData .. ", " .. OR(bit.lshift(state.square2.d, 4), state.square2.v)
-            end
-            if checkNParam then
-                stateData = stateData .. ", " .. OR(bit.lshift(state.noise.p, 4), state.noise.v)
-            end
-            if checkXParam then
-                local dmcTriggerBit = 0
-                if dmcTrigger then
-                    dmcTriggerBit = 1
-                end
-                local noiseModeBit = 0
-                if state.noise.m then
-                    noiseModeBit = 1
-                end
-                local dmcKillBit = 0
-                if checkDMCKill then
-                    dmcKillBit = 1
+            stateData = stateData .. ", " .. OR(
+                OR(bit.lshift(noiseModeBit, 7), bit.lshift(dmcTriggerBit, 6)),
+                bit.lshift(dmcKillBit, 5)
+            )
+            if dmcTrigger then
+                processDmcSample()
+                local dmcLoopBit = 0
+                if rawState.dpcm.dmcloop then
+                    dmcLoopBit = 1
                 end
                 stateData = stateData .. ", " .. OR(
-                    OR(bit.lshift(noiseModeBit, 7), bit.lshift(dmcTriggerBit, 6)),
-                    bit.lshift(dmcKillBit, 5)
-                )
-                if dmcTrigger then
-                    processDmcSample()
-                    local dmcLoopBit = 0
-                    if rawState.dpcm.dmcloop then
-                        dmcLoopBit = 1
-                    end
-                    stateData = stateData .. ", " .. OR(
-                        bit.lshift(rawState.dpcm.regs.frequency, 4),
-                        AND(getDmcIndex(rawState.dpcm.dmcaddress), 0x0F)
-                    ) .. ", " .. OR(bit.lshift(dmcLoopBit, 7), rawState.dpcm.dmcseed)
-                    -- Debug Sample Index
-                    -- emu.print(getDmcIndex(rawState.dpcm.dmcaddress))
-                end
+                    bit.lshift(rawState.dpcm.regs.frequency, 4),
+                    AND(getDmcIndex(rawState.dpcm.dmcaddress), 0x0F)
+                ) .. ", " .. OR(bit.lshift(dmcLoopBit, 7), rawState.dpcm.dmcseed)
+                -- Debug Sample Index
+                -- emu.print(getDmcIndex(rawState.dpcm.dmcaddress))
             end
-
-            -- Clear DMC trigger
-            dmcTrigger = false
-
-            -- Print frame state
-            if skipFirstLine then
-                skipFirstLine = false
-            else
-                table.insert(data, stateData .. ", ")
-                table.insert(trackingData, trackingState)
-            end
-
-            -- Capture known state
-            knownState = state
-
-            -- Reset counter
-            frameRecordCounter = 0
         end
+
+        -- Clear DMC trigger
+        dmcTrigger = false
+
+        -- Print frame state
+        if skipFirstLine then
+            skipFirstLine = false
+        else
+            table.insert(data, stateData .. ", ")
+            table.insert(trackingData, trackingState)
+        end
+
+        -- Capture known state
+        knownState = state
     end
 
     -- Navigate to specified music and start recording
@@ -414,7 +402,7 @@ while true do
                     end
                     emu.print("Done")
                     emu.print(getDataLengthAndLoopPointOffset(loopPoint))
-                    emu.print("0,")
+                    emu.print("0, /* 0 = NTSC, 1 = PAL */")
                     printDmcSamples()
                     for i = 1, table.getn(data) do
                         emu.print(data[i])
@@ -426,7 +414,7 @@ while true do
             end
         else
             emu.print(getDataLengthAndLoopPointOffset(0))
-            emu.print("0,")
+            emu.print("0, /* 0 = NTSC, 1 = PAL */")
             printDmcSamples()
             for i = 1, table.getn(data) do
                 emu.print(data[i])

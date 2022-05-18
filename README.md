@@ -1,41 +1,53 @@
-<img src="https://i.imgur.com/sTk7vtS.png" width="35%">
+![Pretendo](img/logo.png?raw=true "Pretendo")
 
-Turn an Arduino Uno (or any ATmega328-based dev board) into an NES APU emulator!
+Turn an Arduino Uno (or any ATmega328-based dev board), Arduino Due or ESP32 into an NES APU emulator.
 
 # Demos
 
 Captured via Line In from an Arduino Uno
-- [Kirby's Adventure](https://soundcloud.com/user-358261734/pretendo-kirby-test)
-- [RECCA (Summer Carnival '92 - Naxatsoft / KID)](https://soundcloud.com/user-358261734/pretendo-recca-test)
+- [Contra - Base](https://soundcloud.com/vlad-the-compiler/pretendo-contra-base-demo/s-kDB1z5is4Bs?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing)
+- [Dr. Mario - Pre-game screen](https://soundcloud.com/vlad-the-compiler/pretendo-dr-mario-pre-game-demo/s-jvnWnuxdsZ3?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing)
+- *There was another demo with the Underwater level from Super Mario Bros., but apparently the emulation is so accurate that SoundCloud automatically removes it for copyright infringement. I'll take that as a compliment.*
 
 # Features
 
-- Full support for all 5 channels (2 x Square, Triangle, Noise, DPCM)
-- Stereo sound
+- Full support for all 5 channels (2 x Square, Triangle, Noise, DMC)
+- Stereo / Mono sound
+- NES DAC transfer function emulation / Linear mixing
 - Oneshot / Looping / Looping with Intro support
+- PAL / NTSC region support for timings and Noise / DMC tuning
 - Logged format with rudimentary compression
 
-# Dependencies
+# Library dependencies
 
-- TimerOne by Paul Stoffregen (requires download)
+- [TimerOne](https://github.com/PaulStoffregen/TimerOne)
 
 # Setup
 
-- Download [TimerOne](https://github.com/PaulStoffregen/TimerOne) and add to your Arduino /Libraries folder
-- See wiring diagram below
-- Open Serial Monitor
+- See wiring diagram below for how to connect headphones to your board
+- If you're using Arduino Uno:
+    - Download and install [TimerOne](https://github.com/PaulStoffregen/TimerOne) into /Arduino/libraries/
+- Go to the top of Pretendo.ino and select one of the available target platforms:
+    - Arduino Uno
+    - Arduino Due
+    - ESP32
 - Upload Sketch
-- Instructions appear inside Serial Monitor
+- Open Serial Monitor
+- Instructions appear inside Serial Monitor and music plays
 - Enjoy!
 - *See 'Advanced Use' below for how to convert your own files*
 
 # Wiring Diagram
 
-Use 220Ω resistors
+Use 220Ω resistors.
 
-This uses PWM to simulate a DAC, I wouldn't wire this to anything other than simple, analog, cheap headphones
+On Arduino Uno, this program uses PWM to simulate a DAC.
 
-<img src="https://i.imgur.com/4uJwjzQ.png" width="80%%">
+Alternative configurations:
+* If you're using an Arduino Due, connect the Red wire to DAC1, White wire to DAC2
+* If you're using an ESP32 board, connect the Red wire to DAC1, White wire to DAC2
+
+![Wiring diagram](img/wiring.png?raw=true "Wiring diagram")
 
 # Advanced Use
 
@@ -50,14 +62,24 @@ It is done via a Lua script and the FCEUX NES emulator
 
 ### Recording NES music via FCEUX
 
-Using the Lua script, we can capture music data for Pretendo to play. After selecting a ROM, you are free to nagivate inside FCEUX and find the track you wish to record.
-Once you have found a track, write down its number inside the *Arguments* field in the Lua script window in FCEUX.
-If the track should not loop, also write down *--oneshot* after the track number.
-After entering the track number and the optional *--oneshot* argument, press Run in the Lua script window. The capture process will start, and the emulator will start playing back the music.
-- **If the selected music does not loop** (i.e. it stops when it ends), press the **SELECT** key when you wish to end the capture, and the data will be written into the Output Console.
-- **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, press the **SELECT** button and the converter will dump the data to the Output Console.
+Using the Lua script, we can capture music data for Pretendo to play.
+- After selecting a ROM, you are free to nagivate inside FCEUX and find the track you wish to record.
+- Once you have found a track, write down its number inside the *Arguments* field in the Lua script window in FCEUX.
+    - If the track should not loop, also write down *--oneshot* after the track number.
+- After entering the track number and the optional *--oneshot* argument, press Run in the Lua script window. The capture process will start, and the emulator will start playing back the music.
+    - **If the selected music does not loop** (i.e. it stops when it ends), press the **SELECT** key when you wish to end the capture, and the data will be written into the Output Console.
+    - **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, press the **SELECT** button and the converter will dump the data to the Output Console.
 
-In the case of looping music, it is also important to **not** let it loop two full times, as the trimming will fail. Imagine the automatic music trimmer as an algorithm that looks at two loaves of bread: One is full, one has been partially eaten - the algorithm sees the "partially eaten loaf" and goes "hey, I've seen this, this is a part that's identical to the full one, I'll just trim this out". It only needs part of a second loaf of bread to figure out that it looks like the full one. This is what the music trimmer does in our case - it only needs one full playthrough, and then enough of a second one to figure out that it needs to trim it.
+In the case of looping music, it is also important to **not** let it loop two full times, as the trimming will fail to properly discard all the redundant data.
+
+To better understand how the automatic trimmer works, have a look at the following diagram:
+![Cut example](img/cut-example.png?raw=true "Cut example")
+
+Cut at the time indicated by the red arrow.
+
+The automatic trimmer looks for similarities in looping music, cuts off the redundancy and sets the loop point. The converter will only cut looping music once; that means that if the music loops for two full runs of the main melody and you cut when it's already playing the main melody the third time, it will only cut off the third partial playthrough, while keeping the other two playthroughs. It *will* work, but you will end up with the main melody captured twice.
+
+In order to capture the music data without any redundancy, you only need to let it loop for a full playthrough of the main melody, and then cut it off far enough in the second playthrough, but before it actually gets to finish playing that second playthrough.
 
 When you want to convert again, press Stop, change your arguments, and tap Run again in the Lua script window.
 
@@ -65,10 +87,15 @@ Once the music is captured, the Output Console displays a long list of numbers.
 - Select the music data from the Output Console
 - Copy it
 - Paste it inside music.h under music_dev
-- Inside Setup in Pretendo.ino, around line 430, comment selectDemoMusic call
-- Uncomment playMusic(music_dev)
+- Uncomment line 117 in the sketch (demoMusic = music_dev;)
 - Upload the code
+- Select your music in the Serial Monitor
 - Done!
+
+# Caveats
+The converter has no idea what region it should set the playback engine to. I've tried fiddling with the ROM metadata but nothing seemed to yield reliable results.
+
+Inside the dumped music data, you will find a commented line at the very beginning. You can change the region flag accordingly in that line.
 
 # Background
 
@@ -77,24 +104,21 @@ Instead, Pretendo takes an approach *similar* to the VGM format, but eliminating
 
 # Limitations
 
-The current, Arduino Uno-only implementation has the following limitations:
-
-- Sampling rate is capped at 22KHz
-- The bit clock of the DMC is halved, effectively lowering its already-quite-low resolution. This is done to ensure a worst case of 1 DMC bit clock per sound engine cycle, in order to keep the engine running in real time on Arduino Uno
-- Because of the sampling rate being lower than the LFSR (Noise channel)'s maximum frequency, some of the higher frequencies sound alike
+- The following apply only to Arduino Uno:
+    - Sampling rate is capped at 20KHz
+    - The bit clock of the DMC is halved, effectively lowering its already-quite-low resolution. This is done to ensure a worst case of 1 DMC bit clock per sound engine cycle, in order to keep the engine running in real time
+    - Because of the sampling rate being lower than the LFSR (Noise channel)'s maximum frequency, some of the higher frequencies sound alike
 
 # Possible uses
 
+- NES development / DSP research
 - Alarm clocks
 - Doorbells
 - Cool party trick
 
-# To-Do
-
-- Add support for PAL. Currently, all music files are treated as NTSC, affecting tempo and Noise / DPCM pitches
-- Port to Arduino Due, ESP32
 
 # Disclaimer
 
 I am not responsible for any sound hardware you break when using this project.
+
 Please do not wire 5v directly into your expensive headset.
