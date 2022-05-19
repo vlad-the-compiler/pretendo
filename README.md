@@ -5,9 +5,9 @@ Turn an Arduino Uno (or any ATmega328-based dev board), Arduino Due or ESP32 int
 # Demos
 
 Captured via Line In from an Arduino Uno
-- [Contra - Base](https://soundcloud.com/vlad-the-compiler/pretendo-contra-base-demo/s-kDB1z5is4Bs?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing)
-- [Dr. Mario - Pre-game screen](https://soundcloud.com/vlad-the-compiler/pretendo-dr-mario-pre-game-demo/s-jvnWnuxdsZ3?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing)
-- *There was another demo with the Underwater level from Super Mario Bros., but apparently the emulation is so accurate that SoundCloud automatically removes it for copyright infringement. I'll take that as a compliment.*
+- [Super Mario Bros. - Underwater](demos/pretendo-demo-smb-underwater.ogg)
+- [Dr. Mario - Pre-game screen](demos/pretendo-demo-dr-mario-pre-game.ogg)
+- [Contra - Base](demos/pretendo-demo-contra-base.ogg)
 
 # Features
 
