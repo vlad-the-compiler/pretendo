@@ -44,8 +44,8 @@ Use 220Ω resistors.
 On Arduino Uno, this program uses PWM to simulate a DAC.
 
 Alternative configurations:
-* If you're using an Arduino Due, connect the Red wire to DAC1, White wire to DAC2
-* If you're using an ESP32 board, connect the Red wire to DAC1, White wire to DAC2
+* If you're using an Arduino Due, connect the White wire to DAC1, Red wire to DAC2
+* If you're using an ESP32 board, connect the White wire to DAC1, Red wire to DAC2
 
 ![Wiring diagram](img/wiring.png?raw=true "Wiring diagram")
 
