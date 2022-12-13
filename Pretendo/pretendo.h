@@ -105,7 +105,7 @@ void setRegion(byte region) {
   byte prevRegion = (NESDMCFrequencyTable == NESDMCFrequencyTable_NTSC ? PRETENDO_NTSC : PRETENDO_PAL);
   bool changedRegion = region != prevRegion;
   if (region == PRETENDO_NTSC) {
-    frameMillis = 17;
+    frameMillis = 16;
     NESLFSRFrequencyTable = NESLFSRFrequencyTable_NTSC;
     NESDMCFrequencyTable = NESDMCFrequencyTable_NTSC;
     if (changedRegion) Serial.println("Region set to NTSC.");

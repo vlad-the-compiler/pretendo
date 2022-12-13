@@ -67,8 +67,8 @@ Using the Lua script, we can capture music data for Pretendo to play.
 - Once you have found a track, write down its number inside the *Arguments* field in the Lua script window in FCEUX.
     - If the track should not loop, also write down *--oneshot* after the track number.
 - After entering the track number and the optional *--oneshot* argument, press Run in the Lua script window. The capture process will start, and the emulator will start playing back the music.
-    - **If the selected music does not loop** (i.e. it stops when it ends), press the **SELECT** key when you wish to end the capture, and the data will be written into the Output Console.
-    - **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, press the **SELECT** button and the converter will dump the data to the Output Console.
+    - **If the selected music does not loop** (i.e. it stops when it ends), press the **SELECT** key when you wish to end the capture, and the data will be written into **apu_capture.h** inside the working directory.
+    - **If the selected music loops**, you need to **let it play at least once, and then at least another half of the looping part's length**. This is because the conversion script looks for similar parts in the music and then trims the excess, leaving a perfectly looping track. Once the music has played through once, and then at least another half of the looping part, press the **SELECT** button and the converter will write the data to **apu_capture.h** inside the working directory.
 
 In the case of looping music, it is also important to **not** let it loop two full times, as the trimming will fail to properly discard all the redundant data.
 
@@ -83,10 +83,9 @@ In order to capture the music data without any redundancy, you only need to let 
 
 When you want to convert again, press Stop, change your arguments, and tap Run again in the Lua script window.
 
-Once the music is captured, the Output Console displays a long list of numbers.
-- Select the music data from the Output Console
-- Copy it
-- Paste it inside music.h under music_dev
+Once the music is captured, you may copy the contents of **apu_capture.h** into your project.
+- Rename the variable from `apu_capture` into `music_dev`
+- Paste it inside music.h
 - Uncomment line 117 in the sketch (demoMusic = music_dev;)
 - Upload the code
 - Select your music in the Serial Monitor

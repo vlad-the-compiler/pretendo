@@ -1,3 +1,9 @@
+-- Use-once flag; restart the script to use it again
+used = false
+
+-- Recording init message flag
+recMessage = true
+
 -- Frame counter for simulated button presses
 NSFSkipFrames = 2
 NSFSkipFrame = -1
@@ -37,6 +43,8 @@ recording = false
 
 if targetMusicIndex == 0 then
     recording = true
+else
+    emu.print("Seeking to selected song index...")
 end
 
 -- Known PSG state
@@ -81,6 +89,18 @@ data = {}
 -- Tracking data, used for determining the loop point
 trackingData = {}
 
+-- Output file handle and write function
+output = nil
+function writeline(line, indented)
+    local preamble = ""
+    if indented then
+        preamble = "    "
+    end
+    if output ~= nil then
+        output:write(preamble .. line, "\n")
+    end
+end
+
 -- Match identical data to find loop point and trim redundant frames
 function lookupDataInterval(a, b)
     local index = -1
@@ -121,7 +141,7 @@ function getDataLengthAndLoopPointOffset(loopPointFrameIndex)
     end
 
     local cBytes = bit.rshift(byteLength, 8) .. ", " .. AND(byteLength, 255) .. ", "
-    cBytes = cBytes .. bit.rshift(loopPointByteIndex, 8) .. ", " .. AND(loopPointByteIndex, 255) .. ", "
+    cBytes = cBytes .. bit.rshift(loopPointByteIndex, 8) .. ", " .. AND(loopPointByteIndex, 255) .. ","
 
     return cBytes;
 end
@@ -181,14 +201,15 @@ function make2Bytes(number)
     return bit.rshift(number, 8) .. ", " .. AND(number, 255)
 end
 
-function printDmcSamples()
-    emu.print(dmcSamples .. ", ")
+function writeDmcSamples()
+    writeline("// DMC samples", true)
+    writeline(dmcSamples .. ",", true)
     if dmcSamples > 0 then
         local lengths = ""
         for i = 1, dmcSamples do
             lengths = lengths .. make2Bytes(dmcStore[i - 1].len) .. ", "
         end
-        emu.print(lengths)
+        writeline(lengths:sub(1, -2), true)
         local samples = ""
         local sampleColCounter = 0
         for i = 1, dmcSamples do
@@ -196,233 +217,253 @@ function printDmcSamples()
             for j = 1, dmcSample.len do
                 samples = samples .. dmcSample.data[j] .. ", "
                 sampleColCounter = sampleColCounter + 1
-                if sampleColCounter == 32 then
-                    samples = samples .. "\r\n"
+                if sampleColCounter == 24 then
+                    samples = samples:sub(1, -2) .. "\n    "
                     sampleColCounter = 0
                 end
             end
             if i ~= dmcSamples then
-                samples = samples .. "\r\n"
+                samples = samples:sub(1, -2) .. "\n    "
                 sampleColCounter = 0
             end
         end
-        emu.print(samples)
+        writeline(samples:sub(1, -2), true)
     end
 end
 
 -- Game loop
 while true do
-    if recording then
-        -- Compute new state
-        rawState = sound.get().rp2a03
-        state = {
-            square1 = {
-                f = math.floor(rawState.square1.frequency),
-                v = math.floor((rawState.square1.volume * 15) + 0.5),
-                d = rawState.square1.duty
-            },
-            square2 = {
-                f = math.floor(rawState.square2.frequency),
-                v = math.floor((rawState.square2.volume * 15) + 0.5),
-                d = rawState.square2.duty
-            },
-            triangle = {
-                f = math.floor(rawState.triangle.frequency),
-                v = math.floor(rawState.triangle.volume + 0.5),
-            },
-            noise = {
-                p = rawState.noise.regs.frequency,
-                v = math.floor((rawState.noise.volume * 15) + 0.5),
-                m = rawState.noise.short
-            },
-            dpcm = {
-                v = math.floor(rawState.dpcm.volume + 0.5)
+    if not used then
+        if recording then
+            if recMessage then
+                emu.print("Recording started. Press SELECT to capture.")
+                recMessage = false
+            end
+            -- Compute new state
+            rawState = sound.get().rp2a03
+            state = {
+                square1 = {
+                    f = math.floor(rawState.square1.frequency),
+                    v = math.floor((rawState.square1.volume * 15) + 0.5),
+                    d = rawState.square1.duty
+                },
+                square2 = {
+                    f = math.floor(rawState.square2.frequency),
+                    v = math.floor((rawState.square2.volume * 15) + 0.5),
+                    d = rawState.square2.duty
+                },
+                triangle = {
+                    f = math.floor(rawState.triangle.frequency),
+                    v = math.floor(rawState.triangle.volume + 0.5),
+                },
+                noise = {
+                    p = rawState.noise.regs.frequency,
+                    v = math.floor((rawState.noise.volume * 15) + 0.5),
+                    m = rawState.noise.short
+                },
+                dpcm = {
+                    v = math.floor(rawState.dpcm.volume + 0.5)
+                }
             }
-        }
-        -- Compute state changes
-        checkS1F = (state.square1.f ~= knownState.square1.f)
-        checkS2F = (state.square2.f ~= knownState.square2.f)
-        checkTF = (state.triangle.f ~= knownState.triangle.f)
-        checkS1Param = ((state.square1.v ~= knownState.square1.v) or (state.square1.d ~= knownState.square1.d))
-        checkS2Param = ((state.square2.v ~= knownState.square2.v) or (state.square2.d ~= knownState.square2.d))
-        checkNParam = ((state.noise.v ~= knownState.noise.v) or (state.noise.p ~= knownState.noise.p))
-        checkDMCKill = (state.dpcm.v == 0) and (knownState.dpcm.v == 1)
-        checkXParam = ((state.noise.m ~= knownState.noise.m) or (dmcTrigger) or (checkDMCKill))
+            -- Compute state changes
+            checkS1F = (state.square1.f ~= knownState.square1.f)
+            checkS2F = (state.square2.f ~= knownState.square2.f)
+            checkTF = (state.triangle.f ~= knownState.triangle.f)
+            checkS1Param = ((state.square1.v ~= knownState.square1.v) or (state.square1.d ~= knownState.square1.d))
+            checkS2Param = ((state.square2.v ~= knownState.square2.v) or (state.square2.d ~= knownState.square2.d))
+            checkNParam = ((state.noise.v ~= knownState.noise.v) or (state.noise.p ~= knownState.noise.p))
+            checkDMCKill = (state.dpcm.v == 0) and (knownState.dpcm.v == 1)
+            checkXParam = ((state.noise.m ~= knownState.noise.m) or (dmcTrigger) or (checkDMCKill))
 
-        -- Build tracking state
-        -- This only includes pitches, and records absolute values, not changes
-        -- Used in tracking the loop point
-        local trackingState = ""
-        if rawState.square1.volume > 0 then
-            trackingState = trackingState .. "[" .. math.round(rawState.square1.midikey) .. "]"
-        end
-        if rawState.square2.volume > 0 then
-            trackingState = trackingState .. "[" .. math.round(rawState.square2.midikey) .. "]"
-        end
-        if rawState.triangle.volume > 0 then
-            trackingState = trackingState .. "[" .. math.round(rawState.triangle.midikey) .. "]"
-        end
-        if rawState.noise.volume > 0 then
-            trackingState = trackingState .. "[" .. rawState.noise.regs.frequency .. "]"
-        end
-        if rawState.dpcm.volume > 0 then
-            trackingState = trackingState .. "[" .. rawState.dpcm.regs.frequency .. "]"
-        end
+            -- Build tracking state
+            -- This only includes pitches, and records absolute values, not changes
+            -- Used in tracking the loop point
+            local trackingState = ""
+            if rawState.square1.volume > 0 then
+                trackingState = trackingState .. "[" .. math.round(rawState.square1.midikey) .. "]"
+            end
+            if rawState.square2.volume > 0 then
+                trackingState = trackingState .. "[" .. math.round(rawState.square2.midikey) .. "]"
+            end
+            if rawState.triangle.volume > 0 then
+                trackingState = trackingState .. "[" .. math.round(rawState.triangle.midikey) .. "]"
+            end
+            if rawState.noise.volume > 0 then
+                trackingState = trackingState .. "[" .. rawState.noise.regs.frequency .. "]"
+            end
+            if rawState.dpcm.volume > 0 then
+                trackingState = trackingState .. "[" .. rawState.dpcm.regs.frequency .. "]"
+            end
 
-        -- Set control byte
-        control = 0;
-        if checkS1F then
-            control = OR(control, CONTROL_S1F)
-        end
-        if checkS2F then
-            control = OR(control, CONTROL_S2F)
-        end
-        if checkTF then
-            control = OR(control, CONTROL_TF)
-        end
-        if checkS1Param then
-            control = OR(control, CONTROL_S1PARAM)
-        end
-        if checkS2Param then
-            control = OR(control, CONTROL_S2PARAM)
-        end
-        if checkNParam then
-            control = OR(control, CONTROL_NPARAM)
-        end
-        if state.triangle.v > 0.5 then
-            control = OR(control, CONTROL_STATUS_TV)
-        end
-        if checkXParam then
-            control = OR(control, CONTROL_STATUS_X)
-        end
+            -- Set control byte
+            control = 0;
+            if checkS1F then
+                control = OR(control, CONTROL_S1F)
+            end
+            if checkS2F then
+                control = OR(control, CONTROL_S2F)
+            end
+            if checkTF then
+                control = OR(control, CONTROL_TF)
+            end
+            if checkS1Param then
+                control = OR(control, CONTROL_S1PARAM)
+            end
+            if checkS2Param then
+                control = OR(control, CONTROL_S2PARAM)
+            end
+            if checkNParam then
+                control = OR(control, CONTROL_NPARAM)
+            end
+            if state.triangle.v > 0.5 then
+                control = OR(control, CONTROL_STATUS_TV)
+            end
+            if checkXParam then
+                control = OR(control, CONTROL_STATUS_X)
+            end
 
-        -- Build state changes
-        stateData = tostring(control)
-        if checkS1F then
-            stateData = stateData .. ", " .. AND(bit.rshift(state.square1.f, 8), 255) .. ", " .. AND(state.square1.f, 255)
-        end
-        if checkS2F then
-            stateData = stateData .. ", " .. AND(bit.rshift(state.square2.f, 8), 255) .. ", " .. AND(state.square2.f, 255)
-        end
-        if checkTF then
-            stateData = stateData .. ", " .. AND(bit.rshift(state.triangle.f, 8), 255) .. ", " .. AND(state.triangle.f, 255)
-        end
-        if checkS1Param then
-            stateData = stateData .. ", " .. OR(bit.lshift(state.square1.d, 4), state.square1.v)
-        end
-        if checkS2Param then
-            stateData = stateData .. ", " .. OR(bit.lshift(state.square2.d, 4), state.square2.v)
-        end
-        if checkNParam then
-            stateData = stateData .. ", " .. OR(bit.lshift(state.noise.p, 4), state.noise.v)
-        end
-        if checkXParam then
-            local dmcTriggerBit = 0
-            if dmcTrigger then
-                dmcTriggerBit = 1
+            -- Build state changes
+            stateData = tostring(control)
+            if checkS1F then
+                stateData = stateData .. ", " .. AND(bit.rshift(state.square1.f, 8), 255) .. ", " .. AND(state.square1.f, 255)
             end
-            local noiseModeBit = 0
-            if state.noise.m then
-                noiseModeBit = 1
+            if checkS2F then
+                stateData = stateData .. ", " .. AND(bit.rshift(state.square2.f, 8), 255) .. ", " .. AND(state.square2.f, 255)
             end
-            local dmcKillBit = 0
-            if checkDMCKill then
-                dmcKillBit = 1
+            if checkTF then
+                stateData = stateData .. ", " .. AND(bit.rshift(state.triangle.f, 8), 255) .. ", " .. AND(state.triangle.f, 255)
             end
-            stateData = stateData .. ", " .. OR(
-                OR(bit.lshift(noiseModeBit, 7), bit.lshift(dmcTriggerBit, 6)),
-                bit.lshift(dmcKillBit, 5)
-            )
-            if dmcTrigger then
-                processDmcSample()
-                local dmcLoopBit = 0
-                if rawState.dpcm.dmcloop then
-                    dmcLoopBit = 1
+            if checkS1Param then
+                stateData = stateData .. ", " .. OR(bit.lshift(state.square1.d, 4), state.square1.v)
+            end
+            if checkS2Param then
+                stateData = stateData .. ", " .. OR(bit.lshift(state.square2.d, 4), state.square2.v)
+            end
+            if checkNParam then
+                stateData = stateData .. ", " .. OR(bit.lshift(state.noise.p, 4), state.noise.v)
+            end
+            if checkXParam then
+                local dmcTriggerBit = 0
+                if dmcTrigger then
+                    dmcTriggerBit = 1
+                end
+                local noiseModeBit = 0
+                if state.noise.m then
+                    noiseModeBit = 1
+                end
+                local dmcKillBit = 0
+                if checkDMCKill then
+                    dmcKillBit = 1
                 end
                 stateData = stateData .. ", " .. OR(
-                    bit.lshift(rawState.dpcm.regs.frequency, 4),
-                    AND(getDmcIndex(rawState.dpcm.dmcaddress), 0x0F)
-                ) .. ", " .. OR(bit.lshift(dmcLoopBit, 7), rawState.dpcm.dmcseed)
-                -- Debug Sample Index
-                -- emu.print(getDmcIndex(rawState.dpcm.dmcaddress))
-            end
-        end
-
-        -- Clear DMC trigger
-        dmcTrigger = false
-
-        -- Print frame state
-        if skipFirstLine then
-            skipFirstLine = false
-        else
-            table.insert(data, stateData .. ", ")
-            table.insert(trackingData, trackingState)
-        end
-
-        -- Capture known state
-        knownState = state
-    end
-
-    -- Navigate to specified music and start recording
-    if NSFSkipFrame == -1 then
-        if currentMusicIndex < targetMusicIndex then
-            joypad.set(1, {right = true})
-            NSFSkipFrame = NSFSkipFrames
-            currentMusicIndex = currentMusicIndex + 1
-            if currentMusicIndex == targetMusicIndex then
-                recording = true
-            end
-        end
-    else
-        NSFSkipFrame = NSFSkipFrame - 1
-    end
-
-    if NSFSkipFrame == 0 then
-        joypad.set(1, { right = false })
-        NSFSkipFrame = -1
-    end
-
-    if joypad.get(1).select then
-        if autoTrim then
-            local length = table.getn(data)
-            local searchLength = 1
-            local loopPoint = 0
-            local found = false
-            emu.print("Searching for loop point in " .. length .. " frames...")
-            while found == false do
-                local foundIndex = lookupDataInterval(length - searchLength + 1, length)
-                if foundIndex == -1 then
-                    found = true
-                    searchLength = searchLength - 1
-                    emu.print("Loop point determined at frame " .. loopPoint)
-                    emu.print(searchLength .. " frames of data are redundant")
-                    emu.print("Trimming...")
-                    for i = 1, searchLength do
-                        data[#data] = nil
+                    OR(bit.lshift(noiseModeBit, 7), bit.lshift(dmcTriggerBit, 6)),
+                    bit.lshift(dmcKillBit, 5)
+                )
+                if dmcTrigger then
+                    processDmcSample()
+                    local dmcLoopBit = 0
+                    if rawState.dpcm.dmcloop then
+                        dmcLoopBit = 1
                     end
-                    emu.print("Done")
-                    emu.print(getDataLengthAndLoopPointOffset(loopPoint))
-                    emu.print("0, /* 0 = NTSC, 1 = PAL */")
-                    printDmcSamples()
-                    for i = 1, table.getn(data) do
-                        emu.print(data[i])
-                    end
-                else
-                    loopPoint = foundIndex
-                    searchLength = searchLength + 1
+                    stateData = stateData .. ", " .. OR(
+                        bit.lshift(rawState.dpcm.regs.frequency, 4),
+                        AND(getDmcIndex(rawState.dpcm.dmcaddress), 0x0F)
+                    ) .. ", " .. OR(bit.lshift(dmcLoopBit, 7), rawState.dpcm.dmcseed)
+                    -- Debug Sample Index
+                    -- emu.print(getDmcIndex(rawState.dpcm.dmcaddress))
+                end
+            end
+
+            -- Clear DMC trigger
+            dmcTrigger = false
+
+            -- Print frame state
+            if skipFirstLine then
+                skipFirstLine = false
+            else
+                table.insert(data, stateData .. ",")
+                table.insert(trackingData, trackingState)
+            end
+
+            -- Capture known state
+            knownState = state
+        end
+
+        -- Navigate to specified music and start recording
+        if NSFSkipFrame == -1 then
+            if currentMusicIndex < targetMusicIndex then
+                joypad.set(1, {right = true})
+                NSFSkipFrame = NSFSkipFrames
+                currentMusicIndex = currentMusicIndex + 1
+                if currentMusicIndex == targetMusicIndex then
+                    recording = true
                 end
             end
         else
-            emu.print(getDataLengthAndLoopPointOffset(0))
-            emu.print("0, /* 0 = NTSC, 1 = PAL */")
-            printDmcSamples()
-            for i = 1, table.getn(data) do
-                emu.print(data[i])
-            end
+            NSFSkipFrame = NSFSkipFrame - 1
         end
-        joypad.set(1, { select = false })
-    end
 
+        if NSFSkipFrame == 0 then
+            joypad.set(1, { right = false })
+            NSFSkipFrame = -1
+        end
+
+        if joypad.get(1).select then
+            output = io.open("apu_capture.h", "w")
+            writeline("const byte apu_capture[] PROGMEM = {")
+            if autoTrim then
+                local length = table.getn(data)
+                local searchLength = 1
+                local loopPoint = 0
+                local found = false
+                emu.print("Searching for loop point in " .. length .. " frames...")
+                while found == false do
+                    local foundIndex = lookupDataInterval(length - searchLength + 1, length)
+                    if foundIndex == -1 then
+                        found = true
+                        searchLength = searchLength - 1
+                        emu.print("Loop point determined at frame " .. loopPoint)
+                        emu.print(searchLength .. " frames of data are redundant")
+                        emu.print("Trimming...")
+                        for i = 1, searchLength do
+                            data[#data] = nil
+                        end
+                        writeline("// Length and loop point offset", true)
+                        writeline(getDataLengthAndLoopPointOffset(loopPoint), true)
+                        writeline("// Region flag: 0 = NTSC (default - change as required), 1 = PAL", true)
+                        writeline("0,", true)
+                        writeDmcSamples()
+                        writeline("// APU frames", true)
+                        for i = 1, table.getn(data) do
+                            writeline(data[i], true)
+                        end
+                    else
+                        loopPoint = foundIndex
+                        searchLength = searchLength + 1
+                    end
+                end
+            else
+                emu.print("Outputting captured oneshot data...")
+                writeline("// Length and loop point offset", true)
+                writeline(getDataLengthAndLoopPointOffset(0), true)
+                writeline("// Region flag: 0 = NTSC (default - change as required), 1 = PAL", true)
+                writeline("0,", true)
+                writeDmcSamples()
+                writeline("// APU frames", true)
+                for i = 1, table.getn(data) do
+                    writeline(data[i], true)
+                end
+            end
+            writeline("};")
+            output:close()
+            emu.print("Done")
+            emu.print("Saved to apu_capture.h")
+            emu.print("Script ended. Restart to capture new data.")
+            used = true
+            joypad.set(1, { select = false })
+        end
+
+    end
     -- Return control to FCEUX
     emu.frameadvance()
 end

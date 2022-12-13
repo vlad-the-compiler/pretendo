@@ -2,9 +2,7 @@
   #include <avr/pgmspace.h>
 #endif
 
-const byte music_dev[] PROGMEM = {
-  // Paste your music here
-};
+// Paste your music here
 
 const byte music_duck_hunt_level_complete[] PROGMEM = {
 2, 159, 0, 0, 
