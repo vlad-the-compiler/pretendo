@@ -94,7 +94,7 @@ Once the music is captured, you may copy the contents of **apu_capture.h** into 
 # Caveats
 The converter has no idea what region it should set the playback engine to. I've tried fiddling with the ROM metadata but nothing seemed to yield reliable results.
 
-Inside the dumped music data, you will find a commented line at the very beginning. You can change the region flag accordingly in that line.
+Inside the dumped music data, you will find a commented line at the very beginning. You can change the region flag accordingly on that line.
 
 # Background
 
